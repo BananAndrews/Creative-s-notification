@@ -42,13 +42,16 @@ function sendCreativeNotifications() {
     return;
   }
 
-  // Build email-lookup map from contractors sheet (name → email)
+  // Build email-lookup map from contractors sheet (name → email).
+  // Start at row 0: if the first row is a header its name/email cells won't
+  // look like a real email address, so it will simply be ignored.
   var contractorData = contractorsSheet.getDataRange().getValues();
   var emailMap = {};
-  for (var c = 1; c < contractorData.length; c++) { // skip header row
+  for (var c = 0; c < contractorData.length; c++) {
     var name  = String(contractorData[c][COL_CONTRACTOR_NAME]).trim();
     var email = String(contractorData[c][COL_CONTRACTOR_EMAIL]).trim();
-    if (name && email) {
+    // Only add entries that look like a real email address
+    if (name && email && email.indexOf("@") !== -1) {
       emailMap[name.toLowerCase()] = email;
     }
   }
@@ -57,11 +60,13 @@ function sendCreativeNotifications() {
   var today      = new Date();
   var targetDate = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 2);
 
-  // Read all booking rows in one call
+  // Read all booking rows in one call.
+  // Start at row 0: rows that are headers or truly empty won't parse to a
+  // valid date, so they are skipped naturally by parseEventDate returning null.
   var bookingData = bookingsSheet.getDataRange().getValues();
   var emailsSent  = 0;
 
-  for (var r = 1; r < bookingData.length; r++) { // skip header row
+  for (var r = 0; r < bookingData.length; r++) {
     var row        = bookingData[r];
     var clientName = String(row[COL_CLIENT_NAME]).trim();
     var rawDate    = row[COL_EVENT_DATE];
@@ -110,7 +115,7 @@ function sendCreativeNotifications() {
 
 // ── Email builders ───────────────────────────────────────────
 function buildSubject(clientName) {
-  return "Ready for " + clientName + "'s big day \u2013 a quick friendly briefing";
+  return "\uD83D\uDCF8 Ready for " + clientName + "'s big day? A quick friendly briefing!";
 }
 
 function buildEmailBody(creativeName, clientName) {
@@ -185,17 +190,26 @@ function buildEmailBody(creativeName, clientName) {
 // ── Date helpers ─────────────────────────────────────────────
 
 /**
- * Accepts a native Date object (when Sheets auto-parses the cell)
- * OR a string in MM/DD/YYYY format.
+ * Accepts a native Date object (when Sheets auto-parses the cell),
+ * a MM/DD/YYYY string, OR a Sheets serial-number (days since 30 Dec 1899).
  * Returns a Date at local midnight, or null on failure.
  */
 function parseEventDate(raw) {
+  // Case 1: Sheets already handed us a proper Date object
   if (raw instanceof Date && !isNaN(raw)) {
     return new Date(raw.getFullYear(), raw.getMonth(), raw.getDate());
   }
 
-  var str = String(raw).trim();
-  // Match MM/DD/YYYY
+  // Case 2: Sheets date serial number (a plain positive integer/float)
+  if (typeof raw === "number" && raw > 0) {
+    // Sheets epoch = 30 Dec 1899; add serial days to get the real date
+    var epoch = new Date(1899, 11, 30);
+    var d     = new Date(epoch.getTime() + raw * 86400000);
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  }
+
+  // Case 3: Plain MM/DD/YYYY string
+  var str   = String(raw).trim();
   var parts = str.match(/^([0-9]{1,2})\/([0-9]{1,2})\/([0-9]{4})$/);
   if (parts) {
     var month = parseInt(parts[1], 10) - 1;
@@ -205,6 +219,67 @@ function parseEventDate(raw) {
   }
 
   return null;
+}
+
+// ── Diagnostic helper (run this to debug without sending emails) ──
+/**
+ * Run debugNotifications() from the Apps Script editor when emails
+ * are not being sent. Check View → Logs for a full diagnostic report.
+ */
+function debugNotifications() {
+  var ss               = SpreadsheetApp.getActiveSpreadsheet();
+  var bookingsSheet    = ss.getSheetByName("bookings");
+  var contractorsSheet = ss.getSheetByName("contractors");
+
+  Logger.log("=== DEBUG START ===");
+
+  if (!bookingsSheet)    { Logger.log("FAIL: Sheet 'bookings' not found!");    return; }
+  if (!contractorsSheet) { Logger.log("FAIL: Sheet 'contractors' not found!"); return; }
+
+  // Report contractor map
+  var contractorData = contractorsSheet.getDataRange().getValues();
+  Logger.log("contractors sheet rows (incl. header): " + contractorData.length);
+  var emailMap = {};
+  for (var c = 1; c < contractorData.length; c++) {
+    var cName  = String(contractorData[c][COL_CONTRACTOR_NAME]).trim();
+    var cEmail = String(contractorData[c][COL_CONTRACTOR_EMAIL]).trim();
+    Logger.log("  contractors row " + (c + 1) + ": name='" + cName + "'  email='" + cEmail + "'");
+    if (cName && cEmail) emailMap[cName.toLowerCase()] = cEmail;
+  }
+
+  // Target date
+  var today      = new Date();
+  var targetDate = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 2);
+  Logger.log("Today          : " + today.toDateString());
+  Logger.log("Target date (+2): " + targetDate.toDateString());
+
+  // Report booking rows
+  var bookingData = bookingsSheet.getDataRange().getValues();
+  Logger.log("bookings sheet rows (incl. header): " + bookingData.length);
+
+  for (var r = 0; r < bookingData.length; r++) {
+    var row        = bookingData[r];
+    var clientName = String(row[COL_CLIENT_NAME]).trim();
+    var rawDate    = row[COL_EVENT_DATE];
+    var eventDate  = parseEventDate(rawDate);
+
+    Logger.log("  Row " + (r + 1)
+      + " | Col E (client)='" + clientName + "'"
+      + " | Col H raw='" + rawDate + "' (type:" + typeof rawDate + ")"
+      + " | parsed=" + (eventDate ? eventDate.toDateString() : "NULL")
+      + " | match=" + (eventDate ? isSameDay(eventDate, targetDate) : false));
+
+    if (eventDate && isSameDay(eventDate, targetDate)) {
+      Logger.log("    *** DATE MATCH on row " + (r + 1) + " ***");
+      for (var i = 0; i < COL_CREATIVES.length; i++) {
+        var cre = String(row[COL_CREATIVES[i]]).trim();
+        var em  = emailMap[cre.toLowerCase()] || "(NOT FOUND IN contractors sheet)";
+        Logger.log("    Col " + ["O","P","Q","R"][i] + ": '" + cre + "' → " + em);
+      }
+    }
+  }
+
+  Logger.log("=== DEBUG END ===");
 }
 
 /** Returns true when two Date objects fall on the same calendar day. */
