@@ -121,7 +121,7 @@ function buildSubject(clientName) {
 function buildEmailBody(creativeName, clientName) {
   return "<div style='font-family:Arial,sans-serif;font-size:15px;line-height:1.7;color:#222;max-width:680px'>"
 
-    + "<p>Hi " + creativeName + ",</p>"
+    + "<p>Hi " + creativeName.split(" ")[0] + ",</p>"
 
     + "<p>We are so pumped to have you capturing <strong>" + clientName + "</strong>'s wedding with us! "
     + "We truly value your talent and the unique eye you bring to the Blue Belle family.</p>"
@@ -143,10 +143,11 @@ function buildEmailBody(creativeName, clientName) {
     + "formatted cards for the entire day.</p>"
     + "<p><strong>Sync Your Gear (Crucial):</strong> Please make sure all cameras are synced to the exact "
     + "same time/date. It saves our editors hours of work during multi-cam syncing!</p>"
-    + "<p><strong>Logistics:</strong> Double-check all addresses, weather, and traffic today. We want to make "
-    + "sure you're at the right place at the right time without any stress.</p>"
-    + "<p><strong>Say Hello:</strong> Don't forget to do a \"last call\" with the couple to confirm the final "
-    + "timeline and locations.</p>"
+    + "<p><strong>Logistics:</strong> Before the shoot, please double-check all addresses and weather, "
+    + "and be sure to check live traffic to ensure you are at the right place at the right time.</p>"
+    + "<p><strong>Say Hello:</strong> Don't forget to send the couple a quick \"Happy Wedding Day!\" text message "
+    + "on the morning of the event. It's the best way to wish them a great day, confirm the final timeline, "
+    + "and let them know you'll see them soon without disturbing their preparations.</p>"
 
     + "<hr style='border:none;border-top:1px solid #ddd;margin:20px 0'>"
 
