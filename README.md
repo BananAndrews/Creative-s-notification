@@ -1,40 +1,57 @@
 ## Deployment Guide — `sendCreativeNotifications.gs`
 
-### Step 1 – Open the Apps Script editor
-1. Open your Google Spreadsheet.
-2. Click **Extensions → Apps Script**.
-3. Delete any placeholder code in the editor.
-4. Paste the entire contents of `sendCreativeNotifications.gs` into the editor.
-5. Click **Save** (💾 or Ctrl+S). Name the project anything you like (e.g. *Blue Belle Notifications*).
+### ⚠ Read first: this project has more than one script
 
-### Step 2 – Authorise the script
-1. In the function drop-down (top toolbar), select **`createDailyTrigger`**.
-2. Click **▶ Run**.
-3. Google will ask you to review permissions — click **Review permissions → Allow**.
-   The script needs access to your Spreadsheet and permission to send email on your behalf.
+Every `.gs` file in an Apps Script project shares **one global namespace**. Two files declaring the same variable gives you `SyntaxError: Identifier 'X' has already been declared`. Worse, two files declaring the same **function** produce *no error at all* — whichever loads last silently wins, and the other script stops working.
 
-### Step 3 – Verify the trigger was created
-1. In the left sidebar click the **clock icon** (Triggers).
-2. You should see a trigger: `sendCreativeNotifications` → *Time-driven → Day timer → 7am–8am*.
-3. That's it! The script now runs automatically every morning at 7 AM.
+Because this spreadsheet has other scripts on it (columns L, S and T are theirs), everything here lives inside a single `BBW_NOTIFY` object and every entry point is prefixed `bbw`. This file adds exactly seven names to the global namespace and nothing else.
 
-### Step 4 – Test manually (optional but recommended)
-1. Temporarily add a test row to the **bookings** sheet with today's date + 2 days in Column H and a known creative name in Column O.
-2. Make sure that creative exists in the **contractors** sheet (Column C = name, Column D = email).
-3. In the Apps Script editor, select **`sendCreativeNotifications`** from the drop-down and click **▶ Run**.
-4. Check the **Execution log** (View → Logs) to confirm the email was sent.
-5. Remove the test row when done.
+### Step 1 – Put it in the Apps Script editor
+1. Open your Google Spreadsheet → **Extensions → Apps Script**.
+2. **Delete any older copy of this notification script** from the project's file list (left sidebar). Leaving two copies is what causes the "already been declared" error.
+3. Give this its own file, and paste in the entire contents of `sendCreativeNotifications.gs`.
+4. **Save** (💾 or Ctrl+S).
+
+### Step 2 – Verify nothing is clashing
+1. Select **`bbwSelfCheck`** from the function drop-down → **▶ Run**.
+2. Authorise when prompted (**Review permissions → Allow**) — it needs your Spreadsheet and permission to send mail.
+3. Read the log. It reports name clashes, which account it runs as, remaining email quota, both timezones, and every trigger in the project.
+
+### Step 3 – Install the trigger
+1. Select **`bbwInstallDailyTrigger`** → **▶ Run**. This also removes any stale trigger pointing at the old `sendCreativeNotifications` name.
+2. Confirm in the ⏰ **Triggers** sidebar: `bbwSendCreativeNotifications` → *Time-driven → Day timer → 7am–8am*.
+
+> Triggers are **per account**. If a colleague installed it, you won't see it in your own Triggers list — check with them before installing a second one.
+
+### Step 4 – Test manually
+1. Add a test row to **bookings**: today + 2 days in Column H, a known creative name in Column O.
+2. That creative must exist in **contractors** (Column C = name, Column D = email).
+3. Run **`bbwDryRunNotifications`** — every check, but sends nothing. Read the log to see who *would* be emailed.
+4. Run **`bbwSendCreativeNotifications`** for the real send, then remove the test row.
+
+### Troubleshooting — run these when emails stop arriving
+| Function | What it does |
+|---|---|
+| `bbwSelfCheck()` | Name clashes with other scripts, which account it runs as, email quota, script vs. spreadsheet timezone, and every trigger in the project. **Start here.** |
+| `bbwDebugNotifications()` | Sheets found, resolved column letters, contractor map, every row's parsed date, and each creative → email lookup. |
+| `bbwDryRunNotifications()` | Real run with sending disabled. |
+| `bbwSendTestEmail()` | Emails the template — with placeholder names — to whoever authorised the script, for proof-reading. |
+
+Also check the **Executions** page in the left sidebar. It lists every run and its failure reason. An empty list means the script has never fired at all, which points at a missing trigger or revoked authorization rather than anything in the code.
 
 ### Spreadsheet requirements
 | Sheet name | Column | Content |
 |---|---|---|
-| `bookings` | E | Client Name |
-| `bookings` | H | Event Date (`MM/DD/YYYY` or a native Date cell) |
-| `bookings` | O, P, Q, R | Creative / contractor names (leave empty if unused) |
-| `contractors` | C | Contractor Name (must match exactly, case-insensitive) |
+| `bookings` | E | Couple Names |
+| `bookings` | H | Event Date (`MM/DD/YYYY`, `YYYY-MM-DD`, or a native Date cell) |
+| `bookings` | O, P, Q, R | Finally assigned: lead photographer, second photographer, lead videographer, second videographer |
+| `contractors` | C | Contractor Name (matched case- and spacing-insensitively) |
 | `contractors` | D | Contractor Email Address |
 
-> **Tip:** Both sheets must be named exactly `bookings` and `contractors` (lowercase).
+Other bookings columns (D area, F city, G event type, I venue, J service type, K package/add-ons, M notes, N project folder, and L/S/T reserved for other scripts) are ignored by this script.
+
+> **Sheet names** are matched case-insensitively, so `Bookings` and `bookings` both work.
+> **Columns** are resolved from the header row by name first, and only fall back to the fixed letters above if the header is missing — so inserting a column no longer breaks the script. Any mismatch is written to the log as a `NOTE:` line.
 
 ---
 
@@ -104,6 +121,8 @@ The Sweet Spot: Shoot at 60fps (keep 24fps just for the vows/speeches and only i
 Audio & Photo: External audio is mandatory for ceremonies/toasts (no in-camera audio!). Photographers: RAW format only, ISO under 3200, and use flash for dark environments. No Auto modes or JPEGs, please.
 
 📂 Delivery & Payouts
+How to Deliver: All you need to do to complete the media delivery step is go to the Media Delivery page on the Creatives Portal, select your project, and fill out the short form.
+
 48-Hour Rule: Please ensure all uploads are completed within 48 hours of the wedding's completion.
 
 No Alterations: Do NOT rename, transcode, or convert files. We need the original camera structure exactly as it was shot.
@@ -112,9 +131,11 @@ Verify Your Upload: Before finishing, double-check that the file count on your c
 
 Quick Access Links:
 
-📎 Bookings Sheet (To confirm your rate and project details).
+📎 Media Delivery
 
-📎 Media Delivery Sheet (For folder structures and upload steps).
+📎 Handbook
+
+📎 Requirements
 
 We know you’re going to crush it out there! Go create some magic, capture those tear-jerking moments, and may your batteries be full and your memory cards never-ending.
 
@@ -128,12 +149,11 @@ Blue Belle Weddings"
 
 [Creative_Name]  should be Taken from Column O, P, Q, or R of the bookings sheet
 [Client Name]'s should be taken from column E of the bookings sheet
- Bookings Sheet hyperlink - https://docs.google.com/spreadsheets/d/1Tf-h96pkJ1JZ_3TJAsYvFt7d-PHt5w-jm7TaH3Atq7A/edit?pli=1&gid=0#gid=0
+Media Delivery - https://sites.google.com/bluebelleweddings.com/creativesportal/media-delivery?authuser=0
 
-Media Delivery Sheet hyperlink - https://docs.google.com/spreadsheets/d/1Tf-h96pkJ1JZ_3TJAsYvFt7d-PHt5w-jm7TaH3Atq7A/edit?pli=1&gid=1926724890#gid=1926724890
+Handbook - https://sites.google.com/bluebelleweddings.com/creativesportal/handbook?authuser=0
 
-Creatives Portal & Handbook hhttps://sites.google.com/bluebelleweddings.com/creativesportal/home?authuser=7
-.
+Requirements - https://sites.google.com/bluebelleweddings.com/creativesportal/our-requirements?authuser=0
 
 The script should be able to handle multiple recipients for the same event, sending a personalized email to each
 If there are 4 names in each row from O to R then 4 separate emails to 4 different creatives should be sent.
